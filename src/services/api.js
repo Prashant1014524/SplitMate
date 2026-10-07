@@ -2,7 +2,12 @@
  * Centralized API Client for Communicating with Node.js Backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+let rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+rawApiUrl = rawApiUrl.trim().replace(/\/+$/, '');
+if (!rawApiUrl.endsWith('/api')) {
+  rawApiUrl = `${rawApiUrl}/api`;
+}
+const API_BASE_URL = rawApiUrl;
 
 function getAuthHeaders() {
   const token = localStorage.getItem('split_token');
