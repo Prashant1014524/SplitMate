@@ -11,6 +11,9 @@ build
 .env.local
 .env.*.local
 server/.env
+*.db
+*.sqlite*
+server/prisma/*.db
 
 # Logs
 npm-debug.log*
