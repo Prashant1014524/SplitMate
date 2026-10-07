@@ -38,10 +38,13 @@ app.get('/', (req, res) => {
 
 // Healthcheck Route
 app.get('/api/health', (req, res) => {
+  const dbUrl = process.env.DATABASE_URL || '';
+  const host = dbUrl.split('@')[1] ? dbUrl.split('@')[1].split('/')[0] : 'not-set';
   res.json({
     status: 'online',
     timestamp: new Date().toISOString(),
-    service: 'sPLIT Backend REST API'
+    service: 'sPLIT Backend REST API',
+    dbHost: host
   });
 });
 
