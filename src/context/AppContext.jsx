@@ -9,9 +9,20 @@ export function AppProvider({ children }) {
     return localStorage.getItem('split_theme') || 'light';
   });
 
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('split_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [token, setToken] = useState(() => localStorage.getItem('split_token'));
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const hasToken = localStorage.getItem('split_token');
+    const hasUser = localStorage.getItem('split_user');
+    return Boolean(hasToken && !hasUser);
+  });
 
   // Database-backed State
   const [groups, setGroups] = useState([]);
@@ -76,13 +87,18 @@ export function AppProvider({ children }) {
         try {
           const res = await api.getMe();
           setCurrentUser(res.user);
+          localStorage.setItem('split_user', JSON.stringify(res.user));
           setToken(savedToken);
         } catch (err) {
           console.warn('Session expired or invalid token:', err.message);
           localStorage.removeItem('split_token');
+          localStorage.removeItem('split_user');
           setCurrentUser(null);
           setToken(null);
         }
+      } else {
+        localStorage.removeItem('split_user');
+        setCurrentUser(null);
       }
       setLoading(false);
     }
@@ -94,6 +110,32 @@ export function AppProvider({ children }) {
     if (currentUser && token) {
       refreshData();
     }
+  }, [currentUser, token, refreshData]);
+
+  // Real-Time Background Synchronization (Periodic 4s polling + immediate refresh on tab focus)
+  useEffect(() => {
+    if (!currentUser || !token) return;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshData();
+      }
+    }, 4000);
+
+    const handleSync = () => {
+      if (document.visibilityState === 'visible') {
+        refreshData();
+      }
+    };
+
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
+    };
   }, [currentUser, token, refreshData]);
 
   // Handle URL Invite Link (?join=<groupId>)
@@ -125,6 +167,7 @@ export function AppProvider({ children }) {
     try {
       const data = await api.login(email, password);
       localStorage.setItem('split_token', data.token);
+      localStorage.setItem('split_user', JSON.stringify(data.user));
       setToken(data.token);
       setCurrentUser(data.user);
 
@@ -148,6 +191,7 @@ export function AppProvider({ children }) {
     try {
       const data = await api.googleLogin(credential);
       localStorage.setItem('split_token', data.token);
+      localStorage.setItem('split_user', JSON.stringify(data.user));
       setToken(data.token);
       setCurrentUser(data.user);
 
@@ -171,6 +215,7 @@ export function AppProvider({ children }) {
     try {
       const data = await api.register(name, email, password, upiId, phone);
       localStorage.setItem('split_token', data.token);
+      localStorage.setItem('split_user', JSON.stringify(data.user));
       setToken(data.token);
       setCurrentUser(data.user);
 
@@ -193,6 +238,7 @@ export function AppProvider({ children }) {
   const updateUserProfile = async (profileData) => {
     try {
       const data = await api.updateProfile(profileData);
+      localStorage.setItem('split_user', JSON.stringify(data.user));
       setCurrentUser(data.user);
       await refreshData();
       return { success: true };
@@ -203,6 +249,7 @@ export function AppProvider({ children }) {
 
   const logoutUser = () => {
     localStorage.removeItem('split_token');
+    localStorage.removeItem('split_user');
     setToken(null);
     setCurrentUser(null);
     setGroups([]);

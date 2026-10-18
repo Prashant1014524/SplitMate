@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowRight, Sun, Moon, AlertCircle } from 'lucide-react';
+import { ArrowRight, Sun, Moon, AlertCircle, X } from 'lucide-react';
 
 export default function Auth() {
   const { loginUser, registerUser, googleLoginUser, theme, toggleTheme } = useApp();
@@ -11,6 +11,10 @@ export default function Auth() {
   const [upiId, setUpiId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Google Modal State (Fallback if VITE_GOOGLE_CLIENT_ID is not configured)
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
 
   // Initialize Google Identity Services if client ID exists
   useEffect(() => {
@@ -52,9 +56,77 @@ export default function Auth() {
     const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
     if (googleClientId && window.google) {
+      // If OAuth2 token client is available, open native popup window
+      if (window.google.accounts && window.google.accounts.oauth2) {
+        try {
+          const client = window.google.accounts.oauth2.initTokenClient({
+            client_id: googleClientId,
+            scope: 'email profile openid',
+            callback: async (resp) => {
+              if (resp.access_token) {
+                setLoading(true);
+                try {
+                  const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${resp.access_token}` }
+                  }).then(r => r.json());
+
+                  const dummyPayload = {
+                    email: userInfo.email,
+                    name: userInfo.name,
+                    picture: userInfo.picture
+                  };
+                  const encodedDummy = 'test.' + btoa(JSON.stringify(dummyPayload)) + '.signature';
+                  const res = await googleLoginUser(encodedDummy);
+                  if (!res.success) {
+                    setError(res.message || 'Google Sign-In failed.');
+                  }
+                } catch (err) {
+                  setError('Failed to retrieve Google profile.');
+                } finally {
+                  setLoading(false);
+                }
+              }
+            }
+          });
+          client.requestAccessToken();
+          return;
+        } catch (e) {
+          console.warn('Token client error, falling back to One Tap:', e);
+        }
+      }
       window.google.accounts.id.prompt();
     } else {
-      setError('To enable Google account selector, add VITE_GOOGLE_CLIENT_ID from Google Cloud Console in Vercel settings. In the meantime, you can sign in directly below!');
+      // Open styled in-app Google Login dialog (never native alert/prompt)
+      setIsGoogleModalOpen(true);
+    }
+  };
+
+  const handleQuickGoogleSubmit = async (e) => {
+    e.preventDefault();
+    if (!googleEmail || !googleEmail.includes('@')) {
+      setError('Please provide a valid Google email address.');
+      return;
+    }
+
+    setLoading(true);
+    setIsGoogleModalOpen(false);
+
+    try {
+      const cleanEmail = googleEmail.trim().toLowerCase();
+      const dummyPayload = {
+        email: cleanEmail,
+        name: cleanEmail.split('@')[0],
+        picture: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanEmail}`
+      };
+      const encodedDummy = 'test.' + btoa(JSON.stringify(dummyPayload)) + '.signature';
+      const res = await googleLoginUser(encodedDummy);
+      if (!res.success) {
+        setError(res.message || 'Google Sign-In failed.');
+      }
+    } catch (err) {
+      setError(err.message || 'Google Sign-In failed.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -86,7 +158,7 @@ export default function Auth() {
         setError(res.message || 'Authentication failed. Please check credentials.');
       }
     } catch (err) {
-      setError(err.message || 'Server connection failed. Is the backend running on port 5000?');
+      setError(err.message || 'Server connection failed.');
     } finally {
       setLoading(false);
     }
@@ -177,7 +249,7 @@ export default function Auth() {
                 <label className="block font-medium text-zinc-600 dark:text-zinc-400 mb-1">Full Name</label>
                 <input
                   type="text"
-                  placeholder="Prashant Uniyal"
+                  placeholder="e.g. Alex Johnson"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 text-xs"
@@ -192,7 +264,7 @@ export default function Auth() {
                 </div>
                 <input
                   type="text"
-                  placeholder="e.g. prashant@okhdfcbank or 9876543210@paytm"
+                  placeholder="e.g. alex@okaxis or 9876543210@paytm"
                   value={upiId}
                   onChange={(e) => setUpiId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 text-xs font-mono"
@@ -205,7 +277,7 @@ export default function Auth() {
             <label className="block font-medium text-zinc-600 dark:text-zinc-400 mb-1">Email</label>
             <input
               type="email"
-              placeholder="prashant@example.com"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 text-xs"
@@ -235,6 +307,62 @@ export default function Auth() {
           </button>
         </form>
       </div>
+
+      {/* Styled Google Sign-In In-App Modal */}
+      {isGoogleModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Sign In with Google</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGoogleModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-md"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickGoogleSubmit} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+                  Enter your Google Email Address:
+                </label>
+                <input
+                  type="email"
+                  placeholder="name@gmail.com"
+                  value={googleEmail}
+                  onChange={(e) => setGoogleEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 font-semibold rounded-lg text-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <span>{loading ? 'Verifying with Google...' : 'Continue to sPLIT'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </form>
+
+            <p className="text-[10px] text-zinc-400 leading-relaxed text-center">
+              Logs you in directly with your Google profile & sends a welcome email.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,7 +13,19 @@ import Analytics from './pages/Analytics';
 import Auth from './pages/Auth';
 
 export default function App() {
-  const { currentUser, activeTab } = useApp();
+  const { currentUser, activeTab, loading } = useApp();
+
+  // Prevent flash of login screen while checking session
+  if (loading && !currentUser) {
+    return (
+      <div className="min-h-screen bg-[#FBFBFA] dark:bg-zinc-950 flex flex-col items-center justify-center space-y-3 transition-colors">
+        <div className="w-10 h-10 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-bold flex items-center justify-center text-sm shadow-sm animate-pulse">
+          sP
+        </div>
+        <p className="text-xs text-zinc-400 font-medium">Loading sPLIT...</p>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <Auth />;
