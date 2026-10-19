@@ -57,6 +57,31 @@ export function AppProvider({ children }) {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
+  // Synchronize browser history for seamless mobile back-button navigation
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (e.state && e.state.tab) {
+        setActiveTab(e.state.tab);
+        if (e.state.groupId) {
+          setSelectedGroupId(e.state.groupId);
+        }
+      } else {
+        setActiveTab('dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      window.history.replaceState({ tab: 'dashboard' }, '');
+    } else {
+      window.history.pushState({ tab: activeTab, groupId: selectedGroupId }, '');
+    }
+  }, [activeTab, selectedGroupId]);
+
   // Fetch all user data from backend
   const refreshData = useCallback(async () => {
     if (!token) return;
@@ -304,6 +329,36 @@ export function AppProvider({ children }) {
     }
   };
 
+  const deleteGroup = async (groupId) => {
+    try {
+      await api.deleteGroup(groupId);
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+      setExpenses(prev => prev.filter(e => e.groupId !== groupId));
+      setSettlements(prev => prev.filter(s => s.groupId !== groupId));
+      setSelectedGroupId(null);
+      setActiveTab('dashboard');
+      await refreshData();
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to delete group:', err);
+      return { success: false, message: err.message || 'Failed to delete group' };
+    }
+  };
+
+  const leaveGroup = async (groupId) => {
+    try {
+      const res = await api.leaveGroup(groupId);
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+      setSelectedGroupId(null);
+      setActiveTab('dashboard');
+      await refreshData();
+      return { success: true, groupDeleted: res?.groupDeleted };
+    } catch (err) {
+      console.error('Failed to leave group:', err);
+      return { success: false, message: err.message || 'Failed to leave group' };
+    }
+  };
+
   // Settlement Actions
   const addSettlement = async (groupId, payerId, payeeId, amount) => {
     try {
@@ -360,6 +415,8 @@ export function AppProvider({ children }) {
       deleteExpense,
       createGroup,
       joinGroup,
+      deleteGroup,
+      leaveGroup,
       addSettlement,
       deleteSettlement,
       refreshData

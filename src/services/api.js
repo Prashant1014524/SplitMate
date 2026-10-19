@@ -108,6 +108,22 @@ export const api = {
     return handleResponse(res);
   },
 
+  async deleteGroup(groupId) {
+    const res = await fetch(`${API_BASE_URL}/groups/${groupId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async leaveGroup(groupId) {
+    const res = await fetch(`${API_BASE_URL}/groups/${groupId}/leave`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
   // Expenses
   async getExpenses(groupId) {
     const url = groupId ? `${API_BASE_URL}/expenses?groupId=${groupId}` : `${API_BASE_URL}/expenses`;

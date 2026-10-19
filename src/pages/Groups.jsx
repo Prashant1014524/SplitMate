@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { calculateNetBalances, calculateSimplifiedDebts } from '../utils/splitEngine';
-import { ArrowRight, Plus, Check, Users, Trash2, Share2 } from 'lucide-react';
+import { ArrowRight, Plus, Check, Users, Trash2, Share2, ChevronLeft, LogOut, AlertTriangle, X } from 'lucide-react';
 import ShareGroupModal from '../components/Modals/ShareGroupModal';
 
 export default function Groups() {
@@ -16,11 +16,46 @@ export default function Groups() {
     setIsAddExpenseOpen,
     setIsSettleUpOpen,
     openSettleUpWithData,
-    setIsCreateGroupOpen
+    setIsCreateGroupOpen,
+    deleteGroup,
+    leaveGroup,
+    setActiveTab
   } = useApp();
 
   const group = groups.find(g => g.id === selectedGroupId) || groups[0];
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
+
+  const isCreator = group && (group.createdById === currentUser?.id || (!group.createdById && group.members?.[0]?.id === currentUser?.id));
+
+  const handleDeleteGroup = async () => {
+    setActionLoading(true);
+    setActionError('');
+    const res = await deleteGroup(group.id);
+    if (!res.success) {
+      setActionError(res.message || 'Failed to delete group');
+      setActionLoading(false);
+    } else {
+      setActionLoading(false);
+      setIsDeleteModalOpen(false);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    setActionLoading(true);
+    setActionError('');
+    const res = await leaveGroup(group.id);
+    if (!res.success) {
+      setActionError(res.message || 'Failed to leave group');
+      setActionLoading(false);
+    } else {
+      setActionLoading(false);
+      setIsLeaveModalOpen(false);
+    }
+  };
 
   if (!group || groups.length === 0) {
     return (
@@ -49,6 +84,17 @@ export default function Groups() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Back to Dashboard Navigation */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className="inline-flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 py-1 px-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer group"
+        >
+          <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+          <span>Back to Dashboard</span>
+        </button>
+      </div>
+
       {/* Group Switcher Tabs */}
       <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 border-b border-zinc-200/80 dark:border-zinc-800">
         {groups.map(g => (
@@ -81,13 +127,18 @@ export default function Groups() {
             <span className="text-[11px] px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-medium">
               {group.category}
             </span>
+            {isCreator && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold border border-amber-500/20">
+                Creator
+              </span>
+            )}
           </div>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
             Members: {group.members.map(m => m.name).join(', ')}
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2">
           <button
             onClick={() => setIsShareOpen(true)}
             className="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center space-x-1.5 shadow-2xs cursor-pointer"
@@ -111,6 +162,28 @@ export default function Groups() {
             <Plus className="w-3.5 h-3.5" />
             <span>Add Expense</span>
           </button>
+
+          {/* Leave Group Action for any member */}
+          <button
+            onClick={() => { setActionError(''); setIsLeaveModalOpen(true); }}
+            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors flex items-center space-x-1 cursor-pointer"
+            title="Leave Group"
+          >
+            <LogOut className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="hidden sm:inline">Leave</span>
+          </button>
+
+          {/* Delete Group Action strictly for Creator */}
+          {isCreator && (
+            <button
+              onClick={() => { setActionError(''); setIsDeleteModalOpen(true); }}
+              className="px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-medium hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors flex items-center space-x-1 cursor-pointer"
+              title="Delete Entire Group (Creator Only)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -293,6 +366,118 @@ export default function Groups() {
         onClose={() => setIsShareOpen(false)}
         group={group}
       />
+
+      {/* Delete Group Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-rose-600 dark:text-rose-400">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Delete Group?</h3>
+              </div>
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-md cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              Are you sure you want to delete <span className="font-semibold text-zinc-900 dark:text-zinc-100">{group.name}</span>? All expenses, splits, and settlement records in this group will be permanently removed for all members.
+            </p>
+
+            {actionError && (
+              <p className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/40 p-2 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                {actionError}
+              </p>
+            )}
+
+            <div className="flex items-center space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={actionLoading}
+                className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteGroup}
+                disabled={actionLoading}
+                className="flex-1 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center space-x-1"
+              >
+                {actionLoading ? (
+                  <span>Deleting...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Group</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Group Confirmation Modal */}
+      {isLeaveModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-zinc-900 dark:text-zinc-100">
+                <LogOut className="w-5 h-5 text-amber-500 shrink-0" />
+                <h3 className="text-sm font-bold">Leave Group?</h3>
+              </div>
+              <button
+                onClick={() => setIsLeaveModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-md cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              You are about to leave <span className="font-semibold text-zinc-900 dark:text-zinc-100">{group.name}</span>. You won't be able to see or split future expenses in this group unless re-invited.
+            </p>
+
+            {actionError && (
+              <p className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/40 p-2 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                {actionError}
+              </p>
+            )}
+
+            <div className="flex items-center space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsLeaveModalOpen(false)}
+                disabled={actionLoading}
+                className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveGroup}
+                disabled={actionLoading}
+                className="flex-1 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center space-x-1"
+              >
+                {actionLoading ? (
+                  <span>Leaving...</span>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Leave Group</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

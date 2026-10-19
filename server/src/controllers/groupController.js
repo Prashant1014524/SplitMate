@@ -27,6 +27,7 @@ export async function getGroups(req, res, next) {
       name: m.group.name,
       category: m.group.category,
       createdAt: m.group.createdAt,
+      createdById: m.group.createdById,
       members: m.group.members.map(gm => gm.user)
     }));
 
@@ -62,6 +63,7 @@ export async function getGroupById(req, res, next) {
           name: group.name,
           category: group.category,
           createdAt: group.createdAt,
+          createdById: group.createdById,
           members: group.members.map(gm => gm.user)
         }
       }
@@ -240,3 +242,100 @@ export async function getGroupBalances(req, res, next) {
     next(err);
   }
 }
+
+export async function deleteGroup(req, res, next) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const group = await prisma.group.findUnique({
+      where: { id },
+      include: { members: true }
+    });
+
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Group not found.' });
+    }
+
+    if (group.createdById !== userId) {
+      return res.status(403).json({ success: false, message: 'Only the group creator can delete this group.' });
+    }
+
+    // Cascade delete removes members, expenses, and settlements
+    await prisma.group.delete({
+      where: { id }
+    });
+
+    await cacheService.del(`group:balances:${id}`);
+
+    res.json({
+      success: true,
+      message: 'Group deleted successfully.'
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function leaveGroup(req, res, next) {
+  try {
+    const { id: groupId } = req.params;
+    const userId = req.user.id;
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      include: { members: true }
+    });
+
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Group not found.' });
+    }
+
+    const membership = group.members.find(m => m.userId === userId);
+    if (!membership) {
+      return res.status(400).json({ success: false, message: 'You are not a member of this group.' });
+    }
+
+    // If the creator is leaving
+    if (group.createdById === userId) {
+      const remainingMembers = group.members.filter(m => m.userId !== userId);
+      if (remainingMembers.length === 0) {
+        // Only member was creator -> clean delete
+        await prisma.group.delete({ where: { id: groupId } });
+        await cacheService.del(`group:balances:${groupId}`);
+        return res.json({
+          success: true,
+          message: 'You were the only member. Group has been deleted.',
+          groupDeleted: true
+        });
+      } else {
+        // Reassign creator role to next active member
+        await prisma.group.update({
+          where: { id: groupId },
+          data: { createdById: remainingMembers[0].userId }
+        });
+      }
+    }
+
+    // Delete membership
+    await prisma.groupMember.delete({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId
+        }
+      }
+    });
+
+    await cacheService.del(`group:balances:${groupId}`);
+
+    res.json({
+      success: true,
+      message: 'You have left the group successfully.',
+      groupDeleted: false
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

@@ -11,6 +11,7 @@ import PersonalExpenses from './pages/PersonalExpenses';
 import Groups from './pages/Groups';
 import Analytics from './pages/Analytics';
 import Auth from './pages/Auth';
+import MobileNav from './components/MobileNav';
 
 export default function App() {
   const { currentUser, activeTab, loading } = useApp();
@@ -38,13 +39,16 @@ export default function App() {
       <div className="flex flex-1">
         <Sidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full overflow-y-auto pb-24 md:pb-8">
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'expenses' && <PersonalExpenses />}
           {activeTab === 'groups' && <Groups />}
           {activeTab === 'analytics' && <Analytics />}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileNav />
 
       {/* Global Modals */}
       <AddExpenseModal />

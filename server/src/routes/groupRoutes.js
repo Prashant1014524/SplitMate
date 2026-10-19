@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { getGroups, createGroup, getGroupBalances, getGroupById, joinGroup } from '../controllers/groupController.js';
+import {
+  getGroups,
+  createGroup,
+  getGroupBalances,
+  getGroupById,
+  joinGroup,
+  deleteGroup,
+  leaveGroup
+} from '../controllers/groupController.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 
 const router = Router();
@@ -11,5 +19,7 @@ router.post('/', createGroup);
 router.get('/:id', getGroupById);
 router.post('/:id/join', joinGroup);
 router.get('/:id/balances', getGroupBalances);
+router.delete('/:id', deleteGroup);
+router.post('/:id/leave', leaveGroup);
 
 export default router;
