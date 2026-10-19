@@ -174,5 +174,15 @@ export const api = {
       headers: getAuthHeaders()
     });
     return handleResponse(res);
+  },
+
+  // AI OCR
+  async scanReceipt(imageBase64, mimeType = 'image/jpeg') {
+    const res = await fetch(`${API_BASE_URL}/ai/scan-receipt`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ imageBase64, mimeType })
+    });
+    return handleResponse(res);
   }
 };

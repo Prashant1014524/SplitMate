@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes.js';
 import groupRoutes from './routes/groupRoutes.js';
 import expenseRoutes from './routes/expenseRoutes.js';
 import settlementRoutes from './routes/settlementRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
 dotenv.config();
@@ -12,13 +13,14 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Global Middlewares
+// Global Middlewares (10mb limit for AI receipt images)
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Root Welcome Route
 app.get('/', (req, res) => {
@@ -31,7 +33,8 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       groups: '/api/groups',
       expenses: '/api/expenses',
-      settlements: '/api/settlements'
+      settlements: '/api/settlements',
+      ai: '/api/ai'
     }
   });
 });
@@ -53,6 +56,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/settlements', settlementRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Global Error Handler
 app.use(errorHandler);
